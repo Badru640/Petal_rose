@@ -1,13 +1,13 @@
 import { Header } from "../components/header"
 
 
-
-export const Home = () =>{
+export const Contacto = () =>{
     return(
         <div>
             <Header/>
 
-            pagina inicial
+            pagina de contacots.....
         </div>
     )
 }
+export default Contacto
