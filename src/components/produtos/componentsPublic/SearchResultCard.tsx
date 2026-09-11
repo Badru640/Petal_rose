@@ -140,12 +140,11 @@ export const SearchResultCard = React.memo(function SearchResultCard({
         </div>
 
         {isGlobal ? (
-          <span className="shrink-0 flex items-center gap-0.5 text-[8px] font-black uppercase tracking-wider text-amber-300 bg-black/85 px-1.5 py-0.5 rounded-full border border-amber-500/40">
+          <span className="shrink-0 flex items-center gap-0.5 text-[7px] font-black uppercase tracking-wider text-amber-300 bg-black/85 px-1.5 py-0.5 rounded-full border border-amber-500/40">
             <Store size={9} />
-            <span className="hidden sm:inline truncate max-w-[60px]">
+            <span className=" inline truncate max-w-[50px] sm:max-w-[60px]">
               {storeName || "Rede"}
             </span>
-            <span className="sm:hidden">Rede</span>
           </span>
         ) : null}
       </div>

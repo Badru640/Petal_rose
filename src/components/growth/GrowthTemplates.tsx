@@ -54,7 +54,7 @@ export const GrowthTemplates = memo(function GrowthTemplates({
       },
       {
         root: container,
-        threshold: 0.6
+        threshold: 0.5
       }
     );
 
@@ -86,7 +86,7 @@ export const GrowthTemplates = memo(function GrowthTemplates({
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => {
       isScrollingToRef.current = false;
-    }, 450);
+    }, 400);
   }, [templates.length]);
 
   const handleSafeAction = useCallback((callback: () => void) => {
@@ -97,7 +97,7 @@ export const GrowthTemplates = memo(function GrowthTemplates({
   }, []);
 
   return (
-    <section className="space-y-3" style={{ contain: 'content' }}>
+    <section className="space-y-3">
       {/* Topo Desktop */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-1.5">
@@ -129,10 +129,10 @@ export const GrowthTemplates = memo(function GrowthTemplates({
         </div>
       </div>
 
-      {/* Carrossel */}
+      {/* Carrossel Móvel Otimizado para Não Travar o Eixo Vertical */}
       <div
         ref={containerRef}
-        className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-smooth px-1 py-1 no-scrollbar touch-pan-x"
+        className="flex gap-3.5 overflow-x-auto snap-x snap-proximity sm:snap-mandatory px-1 py-1 no-scrollbar overscroll-x-contain touch-pan-y"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {templates.map((item, idx) => {
@@ -145,10 +145,9 @@ export const GrowthTemplates = memo(function GrowthTemplates({
               ref={(el) => {
                 cardRefs.current[idx] = el;
               }}
-              className="snap-center shrink-0 w-[84vw] sm:w-[320px] max-w-[340px] flex flex-col justify-between p-4 sm:p-5 rounded-3xl bg-white border border-zinc-100 shadow-[0_8px_20px_-4px_rgba(0,0,0,0.04),0_2px_6px_rgba(0,0,0,0.02)] transform-gpu"
-              style={{ contain: 'paint layout' }}
+              className="snap-center shrink-0 w-[84vw] sm:w-[320px] max-w-[340px] flex flex-col justify-between p-4 sm:p-5 rounded-3xl bg-white border border-zinc-100 shadow-[0_8px_20px_-4px_rgba(0,0,0,0.04),0_2px_6px_rgba(0,0,0,0.02)]"
             >
-              <div className="space-y-3">
+              <div className="space-y-3 pointer-events-none sm:pointer-events-auto">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                     {t(item.badge) || item.badge}
@@ -160,19 +159,19 @@ export const GrowthTemplates = memo(function GrowthTemplates({
                   )}
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-zinc-50/80 border border-zinc-100 text-zinc-700 select-text">
+                <div className="p-3.5 rounded-2xl bg-zinc-50/80 border border-zinc-100 text-zinc-700">
                   <p className="text-xs sm:text-[13px] leading-relaxed whitespace-pre-line font-normal break-words">
                     {item.text}
                   </p>
                 </div>
               </div>
 
-              {/* Botões de Ação */}
-              <div className="flex items-center gap-2 pt-3 mt-1">
+              {/* Botões de Ação com eventos reativados */}
+              <div className="flex items-center gap-2 pt-3 mt-1 pointer-events-auto">
                 <button
                   type="button"
                   onClick={() => handleSafeAction(() => onShareWhatsApp(item.text))}
-                  className="flex-1 h-9 sm:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-transform text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transform-gpu"
+                  className="flex-1 h-9 sm:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-transform text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <MessageCircle size={14} className="shrink-0" />
                   <span>{t('guide_template_send_wa') || 'Enviar'}</span>
@@ -181,7 +180,7 @@ export const GrowthTemplates = memo(function GrowthTemplates({
                 <button
                   type="button"
                   onClick={() => handleSafeAction(() => onCopy(item.text, idx))}
-                  className={`h-9 sm:h-10 px-3.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform shrink-0 transform-gpu ${
+                  className={`h-9 sm:h-10 px-3.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform shrink-0 ${
                     isCopied
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                       : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 text-zinc-700'

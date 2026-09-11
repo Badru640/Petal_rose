@@ -358,45 +358,48 @@ export const AddToCartButton = memo(function AddToCartButton({
     <div className="w-full min-w-0" style={{ contain: "layout style" }}>
       {/* Botão Principal */}
       <button
-        type="button"
-        onClick={handleMainButtonClick}
-        disabled={disabled || isJustAdded}
-        aria-label={
-          isExactMatch
-            ? t("cart_already_exists", { defaultValue: "Já no Carrinho" })
-            : t("btn_add_to_cart", { defaultValue: "Ao Carrinho" })
-        }
-        className={`relative inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-xs sm:text-sm font-bold uppercase tracking-wider transition-all select-none cursor-pointer active:scale-[0.98] ${
-          disabled
-            ? "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-zinc-800 dark:text-zinc-600 opacity-60 shadow-none"
-            : isJustAdded
-            ? "bg-emerald-600 text-white shadow-xs"
-            : isExactMatch
-            ? "bg-slate-100 text-slate-700 border border-slate-200/80 hover:bg-slate-200/70 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-800 shadow-none"
-            : existingVariantsCount > 0
-            ? "bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800/60 shadow-2xs"
-            : "bg-slate-900 hover:bg-slate-800 text-white dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-100 shadow-xs"
-        } ${className}`}
-      >
-        {isJustAdded ? (
-          <>
-            <Check size={17} strokeWidth={3} className="shrink-0 text-white" />
-            <span className="truncate">{t("cart_added", { defaultValue: "Adicionado!" })}</span>
-          </>
-        ) : isExactMatch ? (
-          <>
-            <CheckCheck size={17} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <span className="truncate">
-              {t("cart_item_exists_badge", { defaultValue: "Já no Carrinho ({qty})" }).replace("{qty}", String(analysis.exactMatchItem?.quantity || 1))}
-            </span>
-          </>
-        ) : (
-          <>
-            <ShoppingCart size={17} className="shrink-0" />
-            <span className="truncate">{t("btn_add_to_cart", { defaultValue: "Ao Carrinho" })}</span>
-          </>
+  type="button"
+  onClick={handleMainButtonClick}
+  disabled={disabled || isJustAdded}
+  aria-label={
+    isExactMatch
+      ? t("cart_already_exists", { defaultValue: "Já no Carrinho" })
+      : t("btn_add_to_cart", { defaultValue: "Ao Carrinho" })
+  }
+  className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-[14px] sm:rounded-full px-3.5 text-xs font-black tracking-wide uppercase select-none active:scale-[0.97] border transition-[color,background-color,border-color] duration-150 ${
+    disabled
+      ? "cursor-not-allowed bg-zinc-900/40 text-zinc-500 border-zinc-800/60 opacity-50 pointer-events-none"
+      : isJustAdded
+      ? "bg-emerald-500 text-black border-emerald-400 font-extrabold"
+      : isExactMatch
+      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/40"
+      : existingVariantsCount > 0
+      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-200"
+      : "bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-100 border-zinc-700/50 hover:border-zinc-600/60 active:bg-zinc-700/80"
+  } ${className}`}
+>
+  {isJustAdded ? (
+    <>
+      <Check size={15} strokeWidth={3} className="shrink-0 text-black" />
+      <span className="truncate">{t("cart_added", { defaultValue: "Adicionado!" })}</span>
+    </>
+  ) : isExactMatch ? (
+    <>
+      <CheckCheck size={15} strokeWidth={2.5} className="shrink-0 text-emerald-400" />
+      <span className="truncate">
+        {t("cart_item_exists_badge", { defaultValue: "No Carrinho ({qty})" }).replace(
+          "{qty}",
+          String(analysis.exactMatchItem?.quantity || 1)
         )}
-      </button>
+      </span>
+    </>
+  ) : (
+    <>
+      <ShoppingCart size={15} strokeWidth={2.2} className="shrink-0 text-emerald-400" />
+      <span className="truncate">{t("btn_add_to_cart", { defaultValue: "Ao Carrinho" })}</span>
+    </>
+  )}
+</button>
 
       {/* Modal Inteligente */}
       {mounted && showModal && existingVariantsCount > 0 && createPortal(

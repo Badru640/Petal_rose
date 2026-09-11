@@ -14,7 +14,6 @@ import { ProductCheckout } from "../components/produtos/componentsAdmim/ProductC
 import { ProductDescription } from "../components/produtos/componentsAdmim/ProductDescription";
 import { StoreTrustCard } from "../components/produtos/componentsAdmim/StoreTrustCard";
 import { RelatedProductsCache } from "../components/produtos/componentsAdmim/RelatedProductsCache";
-import { MobileStickyBar } from "../components/produtos/componentsAdmim/MobileStickyBar";
 import { useWhatsAppOrder } from "../hooks/useWhatsAppOrder";
 import { ProductDetailsNav } from "../components/ProductDetails/ProductDetailsNav";
 import type { CartItemPayload } from "../components/produtos/componentsAdmim/AddToCartButton";
@@ -705,7 +704,7 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
           </>
         )}
       </main>
-
+{/* 
       {!isEditing && (
         <MobileStickyBar 
           localizedTotalPrice={formatMoney(totalPriceFinal)} 
@@ -715,6 +714,7 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
           t={t as any} 
         />
       )}
+        */}
 
       <style>{`.pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
     </div>, 

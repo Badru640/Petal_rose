@@ -36,13 +36,12 @@ export const SearchInputField = React.memo(function SearchInputField({
       className="shrink-0 flex flex-col justify-center select-none pt-2 pb-1.5 bg-transparent"
       style={{ contain: "layout style" }}
     >
-      {/* Sugestões horizontais com rolagem otimizada por GPU */}
+      {/* Sugestões horizontais */}
       {suggestions.length > 0 && (
         <div
-          className={`flex w-full gap-1.5 overflow-x-auto px-3 sm:px-6 md:px-8 py-1.5 no-scrollbar overscroll-contain touch-pan-x transform-gpu ${
+          className={`flex w-full gap-1.5 overflow-x-auto px-3 sm:px-6 md:px-8 py-1.5 no-scrollbar overscroll-contain touch-pan-x ${
             isDark ? "bg-white/[0.04]" : "bg-black/[0.03]"
           }`}
-          style={{ willChange: "scroll-position" }}
         >
           <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-amber-500 pr-1 uppercase tracking-widest shrink-0 pointer-events-none">
             <Zap size={11} className="fill-amber-500/20" />
@@ -91,7 +90,7 @@ export const SearchInputField = React.memo(function SearchInputField({
             value={searchTerm}
             onChange={handleInputChange}
             placeholder={placeholder}
-            className={`w-full bg-transparent text-sm sm:text-base font-semibold outline-hidden py-1 sm:py-2 ${
+            className={`w-full bg-transparent text-base font-semibold outline-hidden py-1 sm:py-2 ${
               isDark
                 ? "text-white placeholder:text-white/40"
                 : "text-slate-900 placeholder:text-black/40"

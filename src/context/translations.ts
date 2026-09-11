@@ -3084,7 +3084,8 @@ standard_option: "Standard",
   common_order: "Checkout",
   checkout_bar: "Checkout bar",
   dock_more_products: "See More",
-  
+  cart_viewing_now:"Viewing now",
+
   },
 
 
@@ -6185,6 +6186,7 @@ standard_option: "Padrão",
 
   dock_more_products: "Ver Mais", 
   
+  cart_viewing_now:"A ver agora",
   
 }
 

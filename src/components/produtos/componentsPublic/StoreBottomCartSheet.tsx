@@ -5,7 +5,6 @@ import {
   Plus, 
   Minus, 
   MessageCircle, 
-  ShoppingBag, 
   ArrowRight, 
   Store, 
   Tag, 
@@ -16,7 +15,7 @@ import {
   ChevronUp, 
   AlertCircle, 
   AlertTriangle, 
-  Share2 
+  Sparkles
 } from "lucide-react";
 import { useTranslate } from "../../../context/LanguageContext";
 import type { CartItemPayload } from "../componentsAdmim/AddToCartButton";
@@ -28,7 +27,7 @@ const STORAGE_CART_KEY = "storely_cart_items";
 const STORAGE_SENT_KEY = "storely_sent_orders";
 const SENT_ORDER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Formatador numérico único estável
+// Formatador numérico único e estável
 const NUMBER_FORMATTER = new Intl.NumberFormat();
 
 type TranslationKey = Parameters<ReturnType<typeof useTranslate>["t"]>[0];
@@ -62,7 +61,6 @@ const UNIT_TRANSLATION_KEY_MAP = {
   t: "product_form_unit_t",
 } as const;
 
-// Cache em memória para evitar normalização contínua na CPU
 const unitCache = new Map<string, string>();
 
 function normalizeUnitKey(raw: string): keyof typeof UNIT_TRANSLATION_KEY_MAP | null {
@@ -74,10 +72,7 @@ function normalizeUnitKey(raw: string): keyof typeof UNIT_TRANSLATION_KEY_MAP | 
     .replace(/²/g, "2")
     .replace(/³/g, "3");
 
-  if (clean in UNIT_TRANSLATION_KEY_MAP) {
-    return clean as keyof typeof UNIT_TRANSLATION_KEY_MAP;
-  }
-
+  if (clean in UNIT_TRANSLATION_KEY_MAP) return clean as keyof typeof UNIT_TRANSLATION_KEY_MAP;
   if (clean === "unidade" || clean === "unit") return "un";
   if (clean === "pecas" || clean === "piece" || clean === "pieces") return "peca";
   if (clean === "pacotes" || clean === "pack" || clean === "packs") return "pacote";
@@ -96,41 +91,31 @@ function normalizeUnitKey(raw: string): keyof typeof UNIT_TRANSLATION_KEY_MAP | 
   if (clean === "metros" || clean === "meter" || clean === "meters") return "m";
   if (clean === "rolos" || clean === "roll" || clean === "rolls") return "rolo";
   if (clean === "tonelada" || clean === "toneladas" || clean === "ton" || clean === "tons") return "t";
-
   return null;
 }
 
 function getTranslatedUnit(unit: string | null | undefined, t: (key: any, ...args: any[]) => string): string {
-  if (!unit || !unit.trim()) {
-    return t(UNIT_TRANSLATION_KEY_MAP.un as any) || "un";
-  }
-
-  if (unitCache.has(unit)) {
-    const cachedKey = unitCache.get(unit)!;
-    return t(cachedKey as any) || unit;
-  }
+  if (!unit || !unit.trim()) return t(UNIT_TRANSLATION_KEY_MAP.un as any) || "un";
+  if (unitCache.has(unit)) return t(unitCache.get(unit)! as any) || unit;
 
   if (unit.startsWith("product_form_unit_")) {
     const translated = t(unit as any);
     if (translated && translated !== unit) return translated;
   }
-
   const matchedKey = normalizeUnitKey(unit);
   if (matchedKey && UNIT_TRANSLATION_KEY_MAP[matchedKey]) {
     const translationKey = UNIT_TRANSLATION_KEY_MAP[matchedKey];
     unitCache.set(unit, translationKey);
     const translated = t(translationKey as any);
-    if (translated && translated !== translationKey) {
-      return translated;
-    }
+    if (translated && translated !== translationKey) return translated;
   }
-
   return unit;
 }
 
 export interface StoreBottomCartSheetProps {
   storeCurrency?: string;
   storeSlug?: string;
+  activeProductKey?: string | null;
   onScrollContainer?: (e: React.UIEvent<HTMLDivElement>) => void;
   onCloseCart?: () => void;
 }
@@ -138,11 +123,14 @@ export interface StoreBottomCartSheetProps {
 interface GroupedCartProduct {
   baseKey: string;
   productId?: string;
+  slug?: string;
   name: string;
   unit: string;
   mainImage?: string | null;
   totalGroupQty: number;
   totalGroupPrice: number;
+  latestAddedAt: number;
+  lookupKeys: Set<string>;
   variations: CartItemPayload[];
 }
 
@@ -166,16 +154,19 @@ interface ConfirmDialogState {
   onConfirm: () => void;
 }
 
+function extractIdFromItem(item: any): string {
+  return String(item?.productId || item?.id || item?._id || "").trim();
+}
+
 function getLineItemKey(item: Partial<CartItemPayload>): string {
   if (item.lineItemId && String(item.lineItemId).trim()) {
     return String(item.lineItemId).trim();
   }
-  const pid = item.productId || item.name || "item";
+  const pid = extractIdFromItem(item) || item.name || "item";
   const opts = item.selectedOptions ? JSON.stringify(item.selectedOptions) : "";
   return `${pid}_${opts}_${item.customNote || ""}`;
 }
 
-// Subcomponente memoizado para item de variação (evita re-render de toda a lista)
 const VariationRow = memo(function VariationRow({
   item,
   storeCurrency,
@@ -278,6 +269,7 @@ const VariationRow = memo(function VariationRow({
 export function StoreBottomCartSheet({
   storeCurrency = "MZN",
   storeSlug = "",
+  activeProductKey = null,
   onScrollContainer,
   onCloseCart,
 }: StoreBottomCartSheetProps) {
@@ -288,7 +280,9 @@ export function StoreBottomCartSheet({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
+  // Travas anti-spam e concorrência na CPU
   const isOperatingRef = useRef(false);
+  const checkoutCooldownUntilRef = useRef<number>(0);
 
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     isOpen: false,
@@ -303,8 +297,9 @@ export function StoreBottomCartSheet({
     try {
       const raw = localStorage.getItem(STORAGE_CART_KEY);
       if (raw) {
-        const parsed: CartItemPayload[] = JSON.parse(raw);
+        const parsed: any[] = JSON.parse(raw);
         const normalizedCart: CartItemPayload[] = [];
+        const now = Date.now();
         for (let i = 0; i < parsed.length; i++) {
           const it = parsed[i];
           const matches = !storeSlug || (it.storeSlug || "").toLowerCase() === storeSlug.toLowerCase();
@@ -312,6 +307,7 @@ export function StoreBottomCartSheet({
             normalizedCart.push({
               ...it,
               lineItemId: getLineItemKey(it),
+              addedAt: it.addedAt || it.createdAt || (now - (parsed.length - i) * 1000),
             });
           }
         }
@@ -342,11 +338,7 @@ export function StoreBottomCartSheet({
           localStorage.setItem(STORAGE_SENT_KEY, JSON.stringify(validSent));
         }
 
-        if (storeSlug) {
-          setSentOrders(validSent.filter((o) => (o.storeSlug || "").toLowerCase() === storeSlug.toLowerCase()));
-        } else {
-          setSentOrders(validSent);
-        }
+        setSentOrders(storeSlug ? validSent.filter((o) => (o.storeSlug || "").toLowerCase() === storeSlug.toLowerCase()) : validSent);
       } else {
         setSentOrders([]);
       }
@@ -399,7 +391,6 @@ export function StoreBottomCartSheet({
     try {
       const raw = localStorage.getItem(STORAGE_CART_KEY);
       let list: CartItemPayload[] = raw ? JSON.parse(raw) : [];
-
       list = list.filter((it) => getLineItemKey(it) !== targetKey);
 
       localStorage.setItem(STORAGE_CART_KEY, JSON.stringify(list));
@@ -417,7 +408,6 @@ export function StoreBottomCartSheet({
       const keysToRemove = new Set(variations.map((v) => getLineItemKey(v)));
       const raw = localStorage.getItem(STORAGE_CART_KEY);
       let list: CartItemPayload[] = raw ? JSON.parse(raw) : [];
-
       list = list.filter((it) => !keysToRemove.has(getLineItemKey(it)));
 
       localStorage.setItem(STORAGE_CART_KEY, JSON.stringify(list));
@@ -524,48 +514,80 @@ export function StoreBottomCartSheet({
     }
   }, []);
 
-  // Agrupamento determinístico leve
+  const normalizedActiveKey = useMemo(() => {
+    return activeProductKey ? activeProductKey.trim().toLowerCase() : null;
+  }, [activeProductKey]);
+
   const groupedProducts = useMemo((): GroupedCartProduct[] => {
     const map = new Map<string, GroupedCartProduct>();
 
     for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const baseKey = String(item.productId || item.name || i).trim().toLowerCase();
+      const item: any = items[i];
+      const prodId = extractIdFromItem(item);
+      const baseKey = (prodId || item.slug || item.name || String(i)).trim().toLowerCase();
       const unit = Number(item.unitPriceFinal || item.price || 0);
       const qty = Number(item.quantity || 1);
       const itemTotal = unit * qty;
+      const itemTime = Number(item.addedAt || item.createdAt || (Date.now() - (items.length - i) * 1000));
 
       const existing = map.get(baseKey);
       if (!existing) {
+        const lookup = new Set<string>();
+        if (prodId) lookup.add(prodId.toLowerCase());
+        if (item.id) lookup.add(String(item.id).toLowerCase());
+        if (item._id) lookup.add(String(item._id).toLowerCase());
+        if (item.slug) lookup.add(String(item.slug).toLowerCase());
+        if (item.productSlug) lookup.add(String(item.productSlug).toLowerCase());
+        if (item.name) lookup.add(String(item.name).trim().toLowerCase());
+
         map.set(baseKey, {
           baseKey,
-          productId: item.productId,
+          productId: prodId,
+          slug: item.slug || item.productSlug,
           name: item.name,
           unit: item.unit || "un",
           mainImage: item.mainImage || null,
           totalGroupQty: qty,
           totalGroupPrice: itemTotal,
+          latestAddedAt: itemTime,
+          lookupKeys: lookup,
           variations: [item],
         });
       } else {
         existing.totalGroupQty += qty;
         existing.totalGroupPrice += itemTotal;
         existing.variations.push(item);
+        if (itemTime > existing.latestAddedAt) {
+          existing.latestAddedAt = itemTime;
+        }
         if (!existing.mainImage && item.mainImage) {
           existing.mainImage = item.mainImage;
         }
         if ((!existing.unit || existing.unit === "un") && item.unit) {
           existing.unit = item.unit;
         }
+        if (item.slug) existing.lookupKeys.add(String(item.slug).toLowerCase());
+        if (item.productSlug) existing.lookupKeys.add(String(item.productSlug).toLowerCase());
       }
     }
 
-    return Array.from(map.values());
-  }, [items]);
+    const list = Array.from(map.values());
+
+    return list.sort((a, b) => {
+      if (normalizedActiveKey) {
+        const isA = a.lookupKeys.has(normalizedActiveKey) || a.baseKey === normalizedActiveKey;
+        const isB = b.lookupKeys.has(normalizedActiveKey) || b.baseKey === normalizedActiveKey;
+        if (isA && !isB) return -1;
+        if (!isA && isB) return 1;
+      }
+      return b.latestAddedAt - a.latestAddedAt;
+    });
+  }, [items, normalizedActiveKey]);
 
   const totalQuantity = useMemo(() => items.reduce((acc, it) => acc + (it.quantity || 1), 0), [items]);
   const totalPrice = useMemo(() => items.reduce((acc, it) => acc + (it.unitPriceFinal || it.price || 0) * (it.quantity || 1), 0), [items]);
 
+  // Montador limpo do pedido para renderizar card visual no WhatsApp
   const formatOrderContent = useCallback((selectedItems: CartItemPayload[]) => {
     const storeLabel = storeSlug ? storeSlug.toUpperCase() : t("cart_default_store" as any, { defaultValue: "LOJA" });
     const subtotalBatch = selectedItems.reduce(
@@ -575,19 +597,13 @@ export function StoreBottomCartSheet({
     const qtyBatch = selectedItems.reduce((acc, it) => acc + Number(it.quantity || 1), 0);
 
     const orderHeaderTitle = t("cart_whatsapp_order_header" as any, { defaultValue: "NOVO PEDIDO" });
-    const variationLabel = t("cart_whatsapp_variation_label" as any, { defaultValue: "Variação" });
-    const qtyLabel = t("cart_whatsapp_qty_label" as any, { defaultValue: "Qtd" });
-    const obsLabel = t("cart_whatsapp_obs_label" as any, { defaultValue: "Obs" });
-    const photoLabel = t("cart_whatsapp_photo_label" as any, { defaultValue: "Foto" });
-    const totalItemsLabel = t("cart_whatsapp_total_items_label" as any, { defaultValue: "Total de Itens" });
-    const totalPayableLabel = t("cart_whatsapp_total_payable_label" as any, { defaultValue: "TOTAL A PAGAR" });
+    const defaultVariationName = t("cart_default_variation" as any, { defaultValue: "Padrão" });
     const closingGreeting = t("cart_whatsapp_closing_greeting" as any, {
       defaultValue: "Olá! Gostaria de confirmar a disponibilidade e o envio deste pedido.",
     });
-    const defaultVariationName = t("cart_default_variation" as any, { defaultValue: "Padrão" });
 
-    let textMsg = `🛍️ *${orderHeaderTitle}* - *${storeLabel}*\n`;
-    textMsg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    let textMsg = `🛍️ *${orderHeaderTitle}* • *${storeLabel}*\n`;
+    textMsg += `─────────────────────\n\n`;
 
     selectedItems.forEach((item, idx) => {
       const unitPrice = Number(item.unitPriceFinal || item.price || 0);
@@ -600,43 +616,56 @@ export function StoreBottomCartSheet({
         : defaultVariationName;
 
       textMsg += `*${idx + 1}. ${item.name}*\n`;
-      textMsg += `   ▫️ ${variationLabel}: ${opts}\n`;
-      textMsg += `   ▫️ ${qtyLabel}: *${qty} ${translatedItemUnit}* (${NUMBER_FORMATTER.format(unitPrice)} ${storeCurrency}) = *${NUMBER_FORMATTER.format(itemTotal)} ${storeCurrency}*\n`;
+      textMsg += `▫️ *Opção:* ${opts}\n`;
+      textMsg += `▫️ *Qtd:* ${qty} ${translatedItemUnit} × ${NUMBER_FORMATTER.format(unitPrice)} ${storeCurrency}\n`;
+      textMsg += `▫️ *Subtotal:* *${NUMBER_FORMATTER.format(itemTotal)} ${storeCurrency}*\n`;
 
       if (item.customNote) {
-        textMsg += `   ▫️ ${obsLabel}: _${item.customNote}_\n`;
+        textMsg += `▫️ *Obs:* _${item.customNote}_\n`;
       }
-      if (item.mainImage && item.mainImage.startsWith("http")) {
-        textMsg += `   ▫️ ${photoLabel}: ${item.mainImage}\n`;
+
+      // Link limpo isolado para geração automática do Open Graph preview no WhatsApp
+      if (item.mainImage && typeof item.mainImage === "string" && item.mainImage.startsWith("http")) {
+        textMsg += `▫️ *Foto:* ${item.mainImage}\n`;
       }
+
       textMsg += `\n`;
     });
 
-    textMsg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    textMsg += `📦 *${totalItemsLabel}:* ${qtyBatch}\n`;
-    textMsg += `💰 *${totalPayableLabel}: ${NUMBER_FORMATTER.format(subtotalBatch)} ${storeCurrency}*\n`;
-    textMsg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    textMsg += `─────────────────────\n`;
+    textMsg += `📦 *Total de Itens:* ${qtyBatch}\n`;
+    textMsg += `💰 *TOTAL A PAGAR: ${NUMBER_FORMATTER.format(subtotalBatch)} ${storeCurrency}*\n`;
+    textMsg += `─────────────────────\n\n`;
     textMsg += `${closingGreeting}`;
 
     return { textMsg, subtotalBatch, qtyBatch };
   }, [storeSlug, storeCurrency, t]);
 
+  // Checkout Inteligente com Nova Aba no Computador + Anti-Spam
   const executeWhatsAppCheckout = async (selectedItems: CartItemPayload[]) => {
-    if (selectedItems.length === 0 || isOperatingRef.current || isProcessingCheckout) return;
+    const now = Date.now();
+    // Prevenção de múltiplos cliques rápidos / spam
+    if (selectedItems.length === 0 || isOperatingRef.current || isProcessingCheckout || now < checkoutCooldownUntilRef.current) {
+      return;
+    }
+
+    checkoutCooldownUntilRef.current = now + 1200;
     isOperatingRef.current = true;
     setIsProcessingCheckout(true);
 
     try {
-      const phone = selectedItems[0]?.storeWhatsApp || "";
-      const cleanPhone = phone.replace(/[^0-9]/g, "");
+      const rawPhone = selectedItems.find((i) => i.storeWhatsApp)?.storeWhatsApp || "";
+      const cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+
       const { textMsg, subtotalBatch, qtyBatch } = formatOrderContent(selectedItems);
 
+      // Salva no histórico local de enviados
       const newSentOrder: SentOrderBatch = {
         id: `order_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         sentAt: new Date().toLocaleDateString(undefined, { hour: "2-digit", minute: "2-digit" }),
         sentTimestamp: Date.now(),
         storeSlug,
-        storeWhatsApp: phone,
+        storeWhatsApp: rawPhone,
         totalPrice: subtotalBatch,
         totalQty: qtyBatch,
         items: selectedItems,
@@ -646,6 +675,7 @@ export function StoreBottomCartSheet({
       const currentSent: SentOrderBatch[] = rawSent ? JSON.parse(rawSent) : [];
       localStorage.setItem(STORAGE_SENT_KEY, JSON.stringify([newSentOrder, ...currentSent]));
 
+      // Remove itens comprados do carrinho
       const sentKeys = new Set(selectedItems.map((i) => getLineItemKey(i)));
       const rawCart = localStorage.getItem(STORAGE_CART_KEY);
       const currentCart: CartItemPayload[] = rawCart ? JSON.parse(rawCart) : [];
@@ -654,53 +684,29 @@ export function StoreBottomCartSheet({
 
       window.dispatchEvent(new Event("storely:cart:sync"));
 
-      let sharedSuccessfully = false;
-
-      if (typeof navigator !== "undefined" && navigator.share) {
-        try {
-          const filesToShare: File[] = [];
-
-          const firstImage = selectedItems.find((i) => i.mainImage && i.mainImage.startsWith("http"))?.mainImage;
-          if (firstImage) {
-            try {
-              const imgRes = await fetch(firstImage, { mode: "cors", cache: "force-cache" });
-              if (imgRes.ok) {
-                const blob = await imgRes.blob();
-                const ext = blob.type.split("/")[1] || "jpg";
-                const imgFile = new File([blob], `produto-pedido.${ext}`, { type: blob.type });
-                filesToShare.push(imgFile);
-              }
-            } catch {
-              // Sem foto anexada
-            }
-          }
-
-          const receiptFile = new File([textMsg], `recibo-${storeSlug || "pedido"}.txt`, {
-            type: "text/plain",
-          });
-          filesToShare.push(receiptFile);
-
-          if (navigator.canShare && navigator.canShare({ files: filesToShare })) {
-            const shareTitle = t("cart_share_order_title" as any, {
-              defaultValue: "Pedido - {store}",
-              store: storeSlug || t("cart_default_store" as any, { defaultValue: "Loja" }),
-            }).replace("{store}", storeSlug || t("cart_default_store" as any, { defaultValue: "Loja" }));
-
-            await navigator.share({
-              files: filesToShare,
-              title: shareTitle,
-              text: textMsg,
-            });
-            sharedSuccessfully = true;
-          }
-        } catch {
-          // Cancelado
+      // Cópia em background (garantia adicional para o cliente)
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(textMsg);
         }
-      }
+      } catch {}
 
-      if (!sharedSuccessfully) {
-        const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`;
-        window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      const encodedMsg = encodeURIComponent(textMsg);
+
+      // Construção do link de disparo
+      const targetUrl = cleanPhone 
+        ? `https://wa.me/${cleanPhone}?text=${encodedMsg}`
+        : `https://api.whatsapp.com/send?text=${encodedMsg}`;
+
+      // Detecção de Computador (Desktop) vs Mobile
+      const isMobile = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
+      if (!isMobile) {
+        // NO COMPUTADOR: Abre em uma nova aba com proteções de segurança
+        window.open(targetUrl, "_blank", "noopener,noreferrer");
+      } else {
+        // NO CELULAR: Redireciona diretamente para chamar o app sem bloquear popup
+        window.location.href = targetUrl;
       }
 
       setActiveTab("sent");
@@ -736,7 +742,6 @@ export function StoreBottomCartSheet({
       }
 
       const mergedCart = Array.from(cartMap.values());
-
       const rawSent = localStorage.getItem(STORAGE_SENT_KEY);
       const currentSent: SentOrderBatch[] = rawSent ? JSON.parse(rawSent) : [];
       const updatedSent = currentSent.filter((o) => o.id !== batch.id);
@@ -754,14 +759,14 @@ export function StoreBottomCartSheet({
   return (
     <div
       className="relative flex flex-col h-full min-h-0 text-zinc-100 select-none bg-[#0c0d12] border-t border-white/10"
-      style={{ contain: "layout style" }}
+      style={{ contain: "layout style paint" }}
     >
-      {/* 1. Header Fixo e Rápido (Sem blur pesado) */}
+      {/* 1. Header Fixo */}
       <div className="flex flex-col border-b border-white/[0.08] bg-[#111217] shrink-0 px-3.5 sm:px-8 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-              <ShoppingBag size={17} strokeWidth={2.2} />
+              <ShoppingCart size={17} strokeWidth={2.2} />
             </div>
             <div className="min-w-0">
               <h2 className="text-xs sm:text-sm font-black tracking-wide uppercase text-zinc-100 truncate">
@@ -780,7 +785,7 @@ export function StoreBottomCartSheet({
             <button
               type="button"
               onClick={requestClearCart}
-              className="text-[11px] font-semibold text-zinc-400 hover:text-rose-400 active:opacity-60 px-2 py-1 rounded-lg shrink-0"
+              className="text-[11px] font-semibold text-zinc-400 hover:text-rose-400 active:opacity-60 px-2 py-1 rounded-lg shrink-0 cursor-pointer"
             >
               {t("cart_clear_all" as any, { defaultValue: "Limpar tudo" })}
             </button>
@@ -790,7 +795,7 @@ export function StoreBottomCartSheet({
             <button
               type="button"
               onClick={requestClearSentHistory}
-              className="text-[11px] font-semibold text-zinc-400 hover:text-rose-400 active:opacity-60 px-2 py-1 rounded-lg shrink-0"
+              className="text-[11px] font-semibold text-zinc-400 hover:text-rose-400 active:opacity-60 px-2 py-1 rounded-lg shrink-0 cursor-pointer"
             >
               {t("cart_clear_sent_history" as any, { defaultValue: "Limpar histórico" })}
             </button>
@@ -801,7 +806,7 @@ export function StoreBottomCartSheet({
           <button
             type="button"
             onClick={() => setActiveTab("cart")}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
               activeTab === "cart" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -814,7 +819,7 @@ export function StoreBottomCartSheet({
           <button
             type="button"
             onClick={() => setActiveTab("sent")}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
               activeTab === "sent" ? "bg-emerald-500/20 text-emerald-300" : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -829,7 +834,7 @@ export function StoreBottomCartSheet({
         </div>
       </div>
 
-      {/* 2. Área de Rolagem Otimizada */}
+      {/* 2. Área de Rolagem Virtualizada */}
       <div
         onScroll={onScrollContainer}
         className="flex-1 overflow-y-auto px-3 sm:px-8 py-3.5 space-y-3 overscroll-contain no-scrollbar"
@@ -851,7 +856,7 @@ export function StoreBottomCartSheet({
                   <button
                     type="button"
                     onClick={onCloseCart}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition-colors active:opacity-75"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition-colors active:opacity-75 cursor-pointer"
                   >
                     <span>{t("cart_explore_products" as any, { defaultValue: "Explorar Produtos" })}</span>
                     <ArrowRight size={13} />
@@ -864,14 +869,19 @@ export function StoreBottomCartSheet({
                 const isExpanded = Boolean(expandedGroups[group.baseKey]);
                 const cardImg = group.mainImage || FALLBACK_PRODUCT_IMAGE;
                 const translatedGroupUnit = getTranslatedUnit(group.unit, t);
+                const isViewingCurrent = Boolean(normalizedActiveKey && group.lookupKeys.has(normalizedActiveKey));
 
                 return (
                   <div
                     key={group.baseKey}
-                    className="rounded-2xl border border-white/10 overflow-hidden bg-[#0e0e12] shadow-sm transform-gpu"
-                    style={{ contain: "layout paint style" }}
+                    className={`rounded-2xl border overflow-hidden bg-[#0e0e12] shadow-sm transform-gpu transition-colors ${
+                      isViewingCurrent ? "border-emerald-500/50 ring-1 ring-emerald-500/20" : "border-white/10"
+                    }`}
+                    style={{ 
+                      contentVisibility: "auto",
+                      containIntrinsicSize: "0 120px" 
+                    }}
                   >
-                    {/* Header do Card (Otimizado sem gradientes triplos pesados) */}
                     <div className="relative min-h-[104px] p-3 sm:p-3.5 flex flex-col justify-between gap-2.5 overflow-hidden">
                       <div className="absolute top-0 right-0 bottom-0 w-3/5 sm:w-1/2 pointer-events-none select-none overflow-hidden">
                         <img
@@ -886,7 +896,6 @@ export function StoreBottomCartSheet({
                         <div className="absolute inset-0 bg-gradient-to-r from-[#0e0e12] to-transparent" />
                       </div>
 
-                      {/* Topo: Miniatura + Título */}
                       <div className="relative z-10 flex items-start gap-3 min-w-0">
                         <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-black/60 border border-white/15 shrink-0">
                           <img
@@ -900,9 +909,17 @@ export function StoreBottomCartSheet({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <h4 className="text-xs sm:text-sm font-bold text-white leading-snug break-words line-clamp-2">
-                            {group.name}
-                          </h4>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="text-xs sm:text-sm font-bold text-white leading-snug break-words line-clamp-2">
+                              {group.name}
+                            </h4>
+                            {isViewingCurrent && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                <Sparkles size={10} />
+                                <span>{t("cart_viewing_now" as any, { defaultValue: "Em exibição" })}</span>
+                              </span>
+                            )}
+                          </div>
 
                           <div className="flex items-baseline gap-1.5 mt-1 flex-wrap">
                             <span className="text-xs sm:text-sm font-black text-emerald-400 tabular-nums tracking-tight">
@@ -928,7 +945,7 @@ export function StoreBottomCartSheet({
                               <button
                                 type="button"
                                 onClick={() => toggleGroupExpand(group.baseKey)}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-200 hover:text-white px-2 py-0.5 rounded-md bg-black/60 border border-white/10 active:opacity-75"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-200 hover:text-white px-2 py-0.5 rounded-md bg-black/60 border border-white/10 active:opacity-75 cursor-pointer"
                               >
                                 <Layers size={10} />
                                 <span>
@@ -943,7 +960,7 @@ export function StoreBottomCartSheet({
                         </div>
                       </div>
 
-                      {/* Ações Rápidas */}
+                      {/* Botão Individual: Abre nova aba no PC sem spam */}
                       <div className="relative z-10 flex items-center justify-between gap-2 pt-2 border-t border-white/[0.08]">
                         <span className="text-[10.5px] text-zinc-300 font-medium truncate">
                           {hasMultipleVariations
@@ -956,10 +973,10 @@ export function StoreBottomCartSheet({
                             type="button"
                             disabled={isProcessingCheckout}
                             onClick={() => executeWhatsAppCheckout(group.variations)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs active:opacity-75 shadow-sm"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs active:opacity-75 shadow-sm cursor-pointer"
                             title={t("cart_order_single_product" as any, { defaultValue: "Comprar este" })}
                           >
-                            <Share2 size={12} className="shrink-0" />
+                            <MessageCircle size={13} className="shrink-0" />
                             <span className="whitespace-nowrap">{t("cart_order_single_product" as any, { defaultValue: "Comprar este" })}</span>
                           </button>
 
@@ -973,7 +990,7 @@ export function StoreBottomCartSheet({
                                 requestRemoveItem(targetKey, false);
                               }
                             }}
-                            className="p-1.5 text-zinc-400 hover:text-rose-400 active:bg-rose-500/15 rounded-lg transition-colors"
+                            className="p-1.5 text-zinc-400 hover:text-rose-400 active:bg-rose-500/15 rounded-lg transition-colors cursor-pointer"
                             title={t("cart_remove_item" as any, { defaultValue: "Remover produto" })}
                           >
                             <Trash2 size={15} strokeWidth={2} />
@@ -982,7 +999,6 @@ export function StoreBottomCartSheet({
                       </div>
                     </div>
 
-                    {/* Variações Renderizadas com Componente Memoizado */}
                     {(!hasMultipleVariations || isExpanded) && (
                       <div className="divide-y divide-white/[0.06] bg-[#090a0d] border-t border-white/[0.08]">
                         {group.variations.map((item) => (
@@ -1028,7 +1044,10 @@ export function StoreBottomCartSheet({
                   <div
                     key={batch.id}
                     className="relative rounded-2xl bg-[#0e0e12] border border-white/10 overflow-hidden shadow-sm transform-gpu"
-                    style={{ contain: "layout paint style" }}
+                    style={{ 
+                      contentVisibility: "auto",
+                      containIntrinsicSize: "0 100px" 
+                    }}
                   >
                     <div className="absolute top-0 right-0 bottom-0 w-3/5 sm:w-1/2 pointer-events-none select-none overflow-hidden">
                       <img
@@ -1072,7 +1091,7 @@ export function StoreBottomCartSheet({
                         <button
                           type="button"
                           onClick={() => handleRestoreToCart(batch)}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/60 hover:bg-black/80 border border-white/10 text-zinc-200 text-[11px] font-semibold active:opacity-75"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/60 hover:bg-black/80 border border-white/10 text-zinc-200 text-[11px] font-semibold active:opacity-75 cursor-pointer"
                         >
                           <RotateCcw size={11} />
                           <span>{t("cart_move_back_to_cart" as any, { defaultValue: "Mover de volta ao carrinho" })}</span>
@@ -1081,9 +1100,9 @@ export function StoreBottomCartSheet({
                         <button
                           type="button"
                           onClick={() => executeWhatsAppCheckout(batch.items)}
-                          className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold active:opacity-75 shadow-sm"
+                          className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold active:opacity-75 shadow-sm cursor-pointer"
                         >
-                          <MessageCircle size={11} />
+                          <MessageCircle size={12} />
                           <span>{t("cart_resend_whatsapp" as any, { defaultValue: "Reenviar Pedido" })}</span>
                         </button>
                       </div>
@@ -1096,7 +1115,7 @@ export function StoreBottomCartSheet({
         </div>
       </div>
 
-      {/* 3. Rodapé Fixo */}
+      {/* 3. Rodapé Fixo (Compra Coletiva) */}
       {activeTab === "cart" && items.length > 0 && (
         <div className="p-3.5 sm:px-8 sm:py-4 bg-[#141418] border-t border-white/10 shrink-0 flex flex-col gap-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto w-full max-w-3xl flex items-center justify-between text-xs sm:text-sm px-1">
@@ -1113,13 +1132,13 @@ export function StoreBottomCartSheet({
               type="button"
               disabled={isProcessingCheckout}
               onClick={() => executeWhatsAppCheckout(items)}
-              className="w-full h-11 sm:h-12 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-xs sm:text-sm rounded-xl flex items-center justify-between px-3.5 sm:px-6 active:opacity-85 gap-2"
+              className="w-full h-11 sm:h-12 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-xs sm:text-sm rounded-xl flex items-center justify-between px-3.5 sm:px-6 active:opacity-85 gap-2 cursor-pointer"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <Share2 size={16} className="shrink-0" />
+                <MessageCircle size={17} className="shrink-0" />
                 <span className="truncate">
                   {t("cart_order_all_products" as any, {
-                    defaultValue: "Finalizar Pedido ({count})",
+                    defaultValue: "Enviar Pedido pelo WhatsApp ({count})",
                     count: totalQuantity,
                   }).replace("{count}", String(totalQuantity))}
                 </span>
@@ -1133,7 +1152,7 @@ export function StoreBottomCartSheet({
         </div>
       )}
 
-      {/* 4. Modal de Confirmação Rápido */}
+      {/* 4. Modal de Confirmação */}
       {confirmDialog.isOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/75">
           <div className="w-full max-w-xs sm:max-w-sm rounded-2xl bg-[#1c1c1f] border border-white/10 p-4 sm:p-5 flex flex-col gap-3">
@@ -1152,7 +1171,7 @@ export function StoreBottomCartSheet({
               <button
                 type="button"
                 onClick={closeConfirmDialog}
-                className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 active:opacity-75"
+                className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 active:opacity-75 cursor-pointer"
               >
                 {t("cancel_button" as any, { defaultValue: "Cancelar" })}
               </button>
@@ -1163,7 +1182,7 @@ export function StoreBottomCartSheet({
                   confirmDialog.onConfirm();
                   closeConfirmDialog();
                 }}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold text-white active:opacity-75 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold text-white active:opacity-75 cursor-pointer ${
                   confirmDialog.isDestructive
                     ? "bg-rose-600 hover:bg-rose-500"
                     : "bg-emerald-600 hover:bg-emerald-500"
