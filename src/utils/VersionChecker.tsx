@@ -6,10 +6,15 @@ interface VersionData {
   packageVersion: string;   // Ex: "0.2.5"
 }
 
-// Chaves essenciais que NUNCA são apagadas
+// Chaves locais do carrinho e pedidos
+const STORAGE_CART_KEY = "storely_cart_items";
+const STORAGE_SENT_KEY = "storely_sent_orders";
+
 const KEYS_TO_PRESERVE = [
   'storely_auth_token', 
-  'country_code'
+  'country_code',
+  STORAGE_CART_KEY,  
+  STORAGE_SENT_KEY,
 ];
 
 const STORAGE_KEYS = {

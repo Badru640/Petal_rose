@@ -17,6 +17,7 @@ import { RelatedProductsCache } from "../components/produtos/componentsAdmim/Rel
 import { MobileStickyBar } from "../components/produtos/componentsAdmim/MobileStickyBar";
 import { useWhatsAppOrder } from "../hooks/useWhatsAppOrder";
 import { ProductDetailsNav } from "../components/ProductDetails/ProductDetailsNav";
+import type { CartItemPayload } from "../components/produtos/componentsAdmim/AddToCartButton";
 
 export interface ProductFormData {
   name: string; category: string; price: string; unit: string; full_description: string; main_image: string; gallery: string[]; stock?: number;
@@ -44,6 +45,9 @@ const UNIT_TRANSLATION_KEY_MAP = {
   m2: "product_form_unit_m2", m3: "product_form_unit_m3", t: "product_form_unit_t",
 } as const;
 
+const STORAGE_CART_KEY = "storely_cart_items";
+const STORAGE_SENT_KEY = "storely_sent_orders";
+
 export function ProductDetails({ isCreating = false, onClose }: ProductDetailsProps) {
   const params = useParams();
   const location = useLocation();
@@ -59,6 +63,7 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
   const { data: adminStore } = useAdminStore();
   const queryClient = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isExecutingOrderRef = useRef(false);
 
   const { sendWhatsAppOrder } = useWhatsAppOrder();
   const isEditorRoute = pathname.includes("admin");
@@ -246,42 +251,263 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
     catch { return `${currency} ${val.toFixed(val % 1 === 0 ? 0 : 2)}`; }
   }, [locale, currency]);
 
-  const translatedUnit = UNIT_TRANSLATION_KEY_MAP[initialData.unit as keyof typeof UNIT_TRANSLATION_KEY_MAP] ? t(UNIT_TRANSLATION_KEY_MAP[initialData.unit as keyof typeof UNIT_TRANSLATION_KEY_MAP] as any) : initialData.unit;
+  const translatedUnit = useMemo(() => {
+    const key = UNIT_TRANSLATION_KEY_MAP[initialData.unit as keyof typeof UNIT_TRANSLATION_KEY_MAP];
+    return key ? t(key as any) : initialData.unit;
+  }, [initialData.unit, t]);
 
-  const handleWhatsAppOrder = useCallback(() => {
-    if (isEditorRoute) return;
-
-    const totalOriginal = unitPriceOriginal * quantity;
-    const totalSaved = totalOriginal - totalPriceFinal;
-
-    const noteSegments: string[] = [];
-
-    const chosenEntries = Object.entries(selectedOptions);
-    if (chosenEntries.length > 0) {
-      const preferencesText = chosenEntries.map(([k, v]) => `• ${k}: ${v}`).join("\n");
-      noteSegments.push(`*Opções Escolhidas:*\n${preferencesText}`);
-    }
-
-    if (discountPercent > 0) {
-      const discountText = `${t("whatsapp_discount_title" as any)} ${discountPercent}${t("whatsapp_discount_suffix" as any)}\n\n${t("whatsapp_price_from" as any)}${formatMoney(totalOriginal)}~\n${t("whatsapp_price_to" as any)}${formatMoney(totalPriceFinal)}*\n${t("whatsapp_savings_prefix" as any)}${formatMoney(totalSaved)}${t("whatsapp_savings_suffix" as any)}`;
-      noteSegments.push(discountText);
-    }
-
-    if (customNote.trim()) {
-      noteSegments.push(`${t("whatsapp_customer_note" as any)} ${customNote.trim()}`);
-    }
-
-    sendWhatsAppOrder({
-      storeName: storeDisplayName,
-      whatsappNumber: storeWhatsAppNumber,
-      productName: initialData.name,
+  // Payload memoizado para garantir estabilidade de referência e evitar re-render desnecessário
+  const currentCartPayload = useMemo<CartItemPayload | null>(() => {
+    if (!initialData.name) return null;
+    return {
+      productId: resolvedProduct?.id || productId || "item",
+      name: initialData.name,
+      price: unitPriceOriginal,
+      unitPriceFinal,
       quantity,
-      unit: translatedUnit,
-      totalPrice: formatMoney(totalPriceFinal),
-      customNote: noteSegments.join("\n\n").trim(), 
-      imageUrl: initialData.main_image,
+      unit: translatedUnit || "un",
+      mainImage: initialData.main_image || "",
+      selectedOptions: Object.keys(selectedOptions).length > 0 ? selectedOptions : {},
+      customNote: customNote.trim(),
+      storeSlug,
+      storeName: storeDisplayName,
+      storeWhatsApp: storeWhatsAppNumber,
+      addedAt: new Date().toISOString(),
+    };
+  }, [
+    initialData.name,
+    initialData.main_image,
+    resolvedProduct?.id,
+    productId,
+    unitPriceOriginal,
+    unitPriceFinal,
+    quantity,
+    translatedUnit,
+    selectedOptions,
+    customNote,
+    storeSlug,
+    storeDisplayName,
+    storeWhatsAppNumber,
+  ]);
+
+  // Conexão com o UnifiedStoreDockSheet sincronizada com o ciclo de render do navegador (Zero CPU/GPU Lag)
+  useEffect(() => {
+    if (isEditorRoute || !currentCartPayload) return;
+
+    let rafId: number;
+    rafId = requestAnimationFrame(() => {
+      window.dispatchEvent(
+        new CustomEvent("storely:active-product", {
+          detail: {
+            payload: currentCartPayload,
+            storeName: storeDisplayName,
+            storeWhatsApp: storeWhatsAppNumber,
+          },
+        })
+      );
     });
-  }, [isEditorRoute, unitPriceOriginal, quantity, totalPriceFinal, selectedOptions, discountPercent, customNote, sendWhatsAppOrder, storeDisplayName, storeWhatsAppNumber, initialData.name, initialData.main_image, translatedUnit, formatMoney, t]);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.dispatchEvent(new CustomEvent("storely:active-product", { detail: null }));
+    };
+  }, [isEditorRoute, currentCartPayload, storeDisplayName, storeWhatsAppNumber]);
+
+  // Envio via WebShare com anexo de foto + registro no localStorage
+  const handleWhatsAppOrder = useCallback(async () => {
+    if (isEditorRoute || isExecutingOrderRef.current) return;
+    isExecutingOrderRef.current = true;
+
+    try {
+      const totalOriginal = unitPriceOriginal * quantity;
+      const totalSaved = totalOriginal - totalPriceFinal;
+
+      // 1. Segmentos de texto da mensagem
+      const noteSegments: string[] = [];
+
+      const chosenEntries = Object.entries(selectedOptions);
+      if (chosenEntries.length > 0) {
+        const preferencesText = chosenEntries.map(([k, v]) => `• ${k}: ${v}`).join("\n");
+        noteSegments.push(`*Opções Escolhidas:*\n${preferencesText}`);
+      }
+
+      if (discountPercent > 0) {
+        const discountText = `${t("whatsapp_discount_title" as any)} ${discountPercent}${t("whatsapp_discount_suffix" as any)}\n\n${t("whatsapp_price_from" as any)}${formatMoney(totalOriginal)}~\n${t("whatsapp_price_to" as any)}${formatMoney(totalPriceFinal)}*\n${t("whatsapp_savings_prefix" as any)}${formatMoney(totalSaved)}${t("whatsapp_savings_suffix" as any)}`;
+        noteSegments.push(discountText);
+      }
+
+      if (customNote.trim()) {
+        noteSegments.push(`${t("whatsapp_customer_note" as any)} ${customNote.trim()}`);
+      }
+
+      // 2. Payload normalizado compatível com o carrinho
+      const pid = resolvedProduct?.id || productId || initialData.name || "item";
+      const optsStr = chosenEntries.length > 0 ? JSON.stringify(selectedOptions) : "";
+      const currentLineItemId = `${pid}_${optsStr}_${customNote.trim()}`;
+
+      const currentItemPayload = {
+        lineItemId: currentLineItemId,
+        productId: resolvedProduct?.id || productId,
+        name: initialData.name,
+        price: unitPriceOriginal,
+        unitPriceFinal: unitPriceFinal,
+        quantity,
+        unit: translatedUnit,
+        mainImage: initialData.main_image,
+        storeSlug,
+        storeWhatsApp: storeWhatsAppNumber,
+        selectedOptions: chosenEntries.length > 0 ? selectedOptions : undefined,
+        customNote: customNote.trim() || undefined,
+      };
+
+      // 3. Salva no histórico de pedidos enviados (storely_sent_orders)
+      try {
+        const newSentOrder = {
+          id: `order_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          sentAt: new Date().toLocaleDateString(undefined, { hour: "2-digit", minute: "2-digit" }),
+          sentTimestamp: Date.now(),
+          storeSlug,
+          storeWhatsApp: storeWhatsAppNumber,
+          totalPrice: totalPriceFinal,
+          totalQty: quantity,
+          items: [currentItemPayload],
+        };
+
+        const rawSent = localStorage.getItem(STORAGE_SENT_KEY);
+        const currentSent = rawSent ? JSON.parse(rawSent) : [];
+        localStorage.setItem(STORAGE_SENT_KEY, JSON.stringify([newSentOrder, ...currentSent]));
+
+        // 4. Remove o item correspondente do carrinho ativo se existir
+        const rawCart = localStorage.getItem(STORAGE_CART_KEY);
+        if (rawCart) {
+          const currentCart = JSON.parse(rawCart);
+          const updatedCart = currentCart.filter((it: any) => {
+            const itPid = it.productId || it.name || "item";
+            const itOpts = it.selectedOptions ? JSON.stringify(it.selectedOptions) : "";
+            const itKey = it.lineItemId || `${itPid}_${itOpts}_${it.customNote || ""}`;
+            return itKey !== currentLineItemId;
+          });
+          localStorage.setItem(STORAGE_CART_KEY, JSON.stringify(updatedCart));
+        }
+
+        window.dispatchEvent(new Event("storely:cart:sync"));
+      } catch (storageErr) {
+        console.warn("Aviso ao sincronizar storage do pedido:", storageErr);
+      }
+
+      // 5. Montagem do texto final formatado
+      const lines: string[] = [
+        `🛍️ *NOVO PEDIDO - ${storeDisplayName.toUpperCase()}*`,
+        `━━━━━━━━━━━━━━━━━━━━━`,
+        `*1. ${initialData.name}*`,
+        `   ▫️ Qtd: *${quantity} ${translatedUnit}* (${formatMoney(unitPriceFinal)}) = *${formatMoney(totalPriceFinal)}*`,
+      ];
+
+      if (chosenEntries.length > 0) {
+        const optsText = chosenEntries.map(([k, v]) => `${k}: ${v}`).join(", ");
+        lines.push(`   ▫️ Variação: ${optsText}`);
+      }
+
+      if (discountPercent > 0) {
+        lines.push(`   ▫️ Desconto: -${discountPercent}% (Poupa: ${formatMoney(totalSaved)})`);
+      }
+
+      if (customNote.trim()) {
+        lines.push(`   ▫️ Obs: _${customNote.trim()}_`);
+      }
+
+      lines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+      lines.push(`💰 *TOTAL A PAGAR: ${formatMoney(totalPriceFinal)}*`);
+      lines.push(`━━━━━━━━━━━━━━━━━━━━━\n`);
+      lines.push(`Olá! Gostaria de confirmar a disponibilidade e o envio deste pedido.`);
+
+      const fullMessageText = lines.join("\n");
+
+      // 6. WebShare com Arquivo de Imagem (Zero Lag de CPU/GPU com Timeout Controller)
+      let sharedWithFiles = false;
+
+      if (typeof navigator !== "undefined" && navigator.share && navigator.canShare) {
+        try {
+          const filesToShare: File[] = [];
+
+          if (initialData.main_image && initialData.main_image.startsWith("http")) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+            try {
+              const res = await fetch(initialData.main_image, {
+                mode: "cors",
+                cache: "force-cache",
+                signal: controller.signal,
+              });
+              clearTimeout(timeoutId);
+
+              if (res.ok) {
+                const blob = await res.blob();
+                const ext = blob.type.split("/")[1] || "jpg";
+                const imgFile = new File([blob], `produto.${ext}`, { type: blob.type });
+                filesToShare.push(imgFile);
+              }
+            } catch {
+              clearTimeout(timeoutId);
+            }
+          }
+
+          const receiptFile = new File([fullMessageText], `pedido-${storeSlug || "storely"}.txt`, {
+            type: "text/plain",
+          });
+          filesToShare.push(receiptFile);
+
+          if (navigator.canShare({ files: filesToShare })) {
+            await navigator.share({
+              title: `Pedido - ${initialData.name}`,
+              text: fullMessageText,
+              files: filesToShare,
+            });
+            sharedWithFiles = true;
+          }
+        } catch {
+          return;
+        }
+      }
+
+      // 7. Fallback Nativo
+      if (!sharedWithFiles) {
+        sendWhatsAppOrder({
+          storeName: storeDisplayName,
+          whatsappNumber: storeWhatsAppNumber,
+          productName: initialData.name,
+          quantity,
+          unit: translatedUnit,
+          totalPrice: formatMoney(totalPriceFinal),
+          customNote: noteSegments.join("\n\n").trim(),
+          imageUrl: initialData.main_image,
+        });
+      }
+    } finally {
+      isExecutingOrderRef.current = false;
+    }
+  }, [
+    isEditorRoute,
+    unitPriceOriginal,
+    quantity,
+    totalPriceFinal,
+    selectedOptions,
+    discountPercent,
+    customNote,
+    resolvedProduct?.id,
+    productId,
+    initialData.name,
+    initialData.main_image,
+    unitPriceFinal,
+    translatedUnit,
+    storeSlug,
+    storeWhatsAppNumber,
+    formatMoney,
+    t,
+    sendWhatsAppOrder,
+    storeDisplayName,
+  ]);
 
   const handleShare = useCallback(async () => {
     const shareData: ShareData = { 
@@ -292,7 +518,7 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
 
     if (initialData.main_image) {
       try {
-        const response = await fetch(initialData.main_image);
+        const response = await fetch(initialData.main_image, { cache: "force-cache" });
         const blob = await response.blob();
         const ext = blob.type.split("/")[1] || "jpg";
         const file = new File([blob], `product.${ext}`, { type: blob.type });
@@ -325,7 +551,7 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
   return createPortal(
     <div 
       ref={scrollRef} 
-      style={{ colorScheme: forceLightUI ? "light" : undefined }}
+      style={{ colorScheme: forceLightUI ? "light" : undefined, willChange: "scroll-position" }}
       className={`fixed inset-0 z-[10000] h-[100dvh] w-full overflow-y-auto overflow-x-hidden ${forceLightUI ? "light" : ""} ${styles.pageBg}`}
     >
       <ProductDetailsNav
@@ -340,6 +566,9 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
         navClass={styles.nav} 
         hoverSoftClass={styles.hoverSoft} 
         t={t as any}
+        localizedTotalPrice={formatMoney(totalPriceFinal)}
+        handleWhatsAppOrder={handleWhatsAppOrder}
+        productName={initialData.name}
       />
 
       <main className="mx-auto w-full max-w-6xl px-0 pb-36 md:px-4 md:pt-10 lg:px-8">
@@ -415,7 +644,6 @@ export function ProductDetails({ isCreating = false, onClose }: ProductDetailsPr
                   />
                 </div>
 
-                {/* Checkout integrado com storeWhatsApp e storeName passados diretamente */}
                 <div className="w-full mb-6">
                   <ProductCheckout 
                     quantity={quantity} 

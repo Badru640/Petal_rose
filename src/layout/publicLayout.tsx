@@ -9,7 +9,8 @@ import { useStorePublic } from "../hooks/useStorePublic";
 import { StoreFooter } from "../components/public/footer/StoreFooter";
 import { useTranslate } from '../context/LanguageContext';
 import { clearStoreCache } from "../utils/storeCache";
-import { FloatingSearch } from "../components/produtos/componentsPublic/FloatingSearch";
+
+import { UnifiedStoreDockSheet } from "../components/produtos/componentsPublic/UnifiedStoreDockSheet";
 
 // ==========================================
 // 🛠️ MODO DE TESTE DO BOTÃO (Muda para false em produção)
@@ -319,11 +320,11 @@ export function PublicLayout() {
         storeCurrency={store?.currency}
       />
 
-      <FloatingSearch 
-        currentStoreId={store.id} 
-        storeCurrency={store.currency || "MZN"} 
-        activeStoreSlug={storeSlug} 
-      />
+<UnifiedStoreDockSheet
+  currentStoreId={store.id} 
+  storeCurrency={store.currency || "MZN"} 
+  activeStoreSlug={storeSlug} 
+/>
     </div>
   );
 }

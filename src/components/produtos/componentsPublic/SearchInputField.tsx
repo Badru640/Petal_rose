@@ -1,7 +1,9 @@
-import React from 'react';
-import { Search, X, Zap } from 'lucide-react';
+import React, { useCallback } from "react";
+import { Search, X, Zap } from "lucide-react";
 
-interface SearchInputFieldProps {
+export type TranslationFunction = (key: string, variables?: Record<string, unknown>) => string;
+
+export interface SearchInputFieldProps {
   searchTerm: string;
   isDark: boolean;
   placeholder: string;
@@ -9,7 +11,7 @@ interface SearchInputFieldProps {
   onChangeTerm: (value: string) => void;
   onSelectSuggestion: (value: string) => void;
   onClear: () => void;
-  t: any; // Prop de tradução adicionada aqui
+  t: TranslationFunction;
 }
 
 export const SearchInputField = React.memo(function SearchInputField({
@@ -20,31 +22,42 @@ export const SearchInputField = React.memo(function SearchInputField({
   onChangeTerm,
   onSelectSuggestion,
   onClear,
-  t // Extraído das props
+  t,
 }: SearchInputFieldProps) {
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChangeTerm(e.target.value);
+    },
+    [onChangeTerm]
+  );
+
   return (
-    // RESOLVIDO: O container agora é bg-transparent/vidro real, deixando ver tudo o que rola por trás
-    <div className={`shrink-0 flex flex-col justify-center pb-safe border-t bg-transparent ${
-      isDark ? " border-white/5" : " border-black/5"
-    }`}>
-      
-      {/* Sugestões de Auto-complete */}
+    <div
+      className="shrink-0 flex flex-col justify-center select-none pt-2 pb-1.5 bg-transparent"
+      style={{ contain: "layout style" }}
+    >
+      {/* Sugestões horizontais com rolagem otimizada por GPU */}
       {suggestions.length > 0 && (
-        <div className={`flex w-full gap-2 overflow-x-auto px-4 py-2 no-scrollbar overscroll-contain border-b ${
-          isDark ? "border-white/5" : "border-black/5"
-        }`}>
-          <div className="flex items-center gap-1.5 text-[8px] md:text-[10px] font-black text-amber-500/90 pr-1 uppercase tracking-widest shrink-0">
-            {/* Texto traduzido usando a função t */}
-            <Zap size={10} className="fill-amber-500/20" /> {t('search_suggestions')}
+        <div
+          className={`flex w-full gap-1.5 overflow-x-auto px-3 sm:px-6 md:px-8 py-1.5 no-scrollbar overscroll-contain touch-pan-x transform-gpu ${
+            isDark ? "bg-white/[0.04]" : "bg-black/[0.03]"
+          }`}
+          style={{ willChange: "scroll-position" }}
+        >
+          <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-amber-500 pr-1 uppercase tracking-widest shrink-0 pointer-events-none">
+            <Zap size={11} className="fill-amber-500/20" />
+            <span>{t("search_suggestions", { defaultValue: "Sugestões" })}</span>
           </div>
+
           {suggestions.map((sug, idx) => (
             <button
-              key={idx}
+              key={`${sug}-${idx}`}
+              type="button"
               onClick={() => onSelectSuggestion(sug)}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[10px] md:text-[12px] font-semibold transition-all active:scale-95 border cursor-pointer ${
-                isDark 
-                  ? "bg-white/10 border-white/10 text-white hover:bg-white/20" 
-                  : "bg-black/40 border-black/10 text-white hover:bg-black/60"
+              className={`shrink-0 rounded-full px-2.5 sm:px-3 py-1 text-xs font-semibold transition-transform duration-100 active:scale-95 cursor-pointer whitespace-nowrap border touch-manipulation ${
+                isDark
+                  ? "bg-white/10 text-zinc-100 hover:bg-white/15 border-white/10"
+                  : "bg-black/5 text-slate-800 hover:bg-black/10 border-black/5"
               }`}
             >
               {sug}
@@ -53,41 +66,56 @@ export const SearchInputField = React.memo(function SearchInputField({
         </div>
       )}
 
-      {/* Caixa de Input (Vidro Puro Intercalado) */}
-      <div className={`px-2 ${suggestions.length > 0 ? 'pb-2 pt-2' : 'py-1 lg:py-3'}`}>
-        <div className={`mx-auto flex max-w-2xl items-center gap-2 rounded-full p-1 pr-4 border transition-all duration-200 ${
-          // Dark: Vidro Esbranquiçado Leve | Light: Vidro Fumado Vazado
-          isDark 
-            ? "bg-white/15 border-white/15 focus-within:bg-white/20 focus-within:border-white/20" 
-            : "bg-black/50 border-black/10 focus-within:bg-black/60 focus-within:border-black/20"
-        }`}>
-          <div className={`flex h-10 w-12 shrink-0 items-center justify-center rounded-full select-none pointer-events-none ${
-            isDark ? "text-white/70" : "text-zinc-300"
-          }`}>
+      {/* Barra de Pesquisa */}
+      <div className={`px-3 sm:px-6 md:px-8 ${suggestions.length > 0 ? "pt-2" : "pt-1"}`}>
+        <div
+          className={`mx-auto flex w-full max-w-4xl items-center gap-2 rounded-xl sm:rounded-2xl p-1 pr-2 sm:pr-3 border transition-colors duration-150 ${
+            isDark
+              ? "bg-white/[0.07] focus-within:bg-white/10 border-white/10 text-white"
+              : "bg-black/[0.04] focus-within:bg-black/[0.07] border-black/10 text-slate-900"
+          }`}
+        >
+          <div
+            className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg select-none pointer-events-none ${
+              isDark ? "text-white/60" : "text-black/50"
+            }`}
+          >
             <Search size={18} strokeWidth={2.5} />
           </div>
+
           <input
-            autoFocus
             type="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             value={searchTerm}
-            onChange={(e) => onChangeTerm(e.target.value)}
-            // O placeholder continuará vindo das props, então você pode passar a tradução lá no componente pai: placeholder={t('placeholder_key')}
+            onChange={handleInputChange}
             placeholder={placeholder}
-            className={`w-full bg-transparent text-base md:text-sm font-semibold outline-none py-2 ${
-              isDark ? "text-white placeholder-white/50" : "text-zinc-100 placeholder-zinc-300"
+            className={`w-full bg-transparent text-sm sm:text-base font-semibold outline-hidden py-1 sm:py-2 ${
+              isDark
+                ? "text-white placeholder:text-white/40"
+                : "text-slate-900 placeholder:text-black/40"
             }`}
           />
-          {searchTerm && (
-            <button 
-              onClick={onClear} 
-              className={`shrink-0 p-1.5 rounded-full transition-colors cursor-pointer ${
-                isDark 
-                  ? "text-white/60 hover:text-white bg-white/10 hover:bg-white/20" 
-                  : "text-zinc-300 hover:text-white bg-white/5 hover:bg-white/15"
+
+          {searchTerm ? (
+            <button
+              type="button"
+              onClick={onClear}
+              className={`shrink-0 flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg transition-colors cursor-pointer touch-manipulation active:scale-95 ${
+                isDark
+                  ? "text-white/70 hover:text-white hover:bg-white/10"
+                  : "text-black/70 hover:text-black hover:bg-black/10"
               }`}
+              title={t("clear", { defaultValue: "Limpar" })}
+              aria-label={t("clear", { defaultValue: "Limpar" })}
             >
               <X size={16} strokeWidth={2.5} />
             </button>
+          ) : (
+            <div className="hidden sm:flex items-center text-[10px] font-bold text-white/40 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 select-none pointer-events-none">
+              ESC
+            </div>
           )}
         </div>
       </div>

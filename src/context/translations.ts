@@ -151,7 +151,6 @@ export const translations = {
     wpp_section_desc: "Set the official number to receive orders via WhatsApp.",
     whatsapp_placeholder: "84 000 0000",
     btn_new_product: "New Product",
-    search_placeholder: "Search products...",
     status_active: "Active",
     status_paused: "Paused",
     
@@ -1568,22 +1567,18 @@ noImage: "No Image",
     category: "Category",
 
 
-    search_title: "Search",
     search_in_store: "In this Store",
-    search_global_title: "Other Stores",
     search_global_btn: "Search in other stores for",
     search_no_results: "No results found.",
     search_suggestions: "Suggestions",
 
 
   search_global_categories: "Global Categories",
-  search_see_local: "See Local",
   search_see_global: "Other Stores",
   search_no_categories: "No local categories found.",
   search_local_results: "Store Products",
   search_no_local_results: "No products found in this store.",
   search_global_button: "Search outside this store",
-  search_no_global_results: "No global results found.",
 
 
 
@@ -1600,7 +1595,8 @@ noImage: "No Image",
   cat_fitness: "Fitness & Outdoor",
   cat_books: "Books & Stationery",
   cat_accessories: "Accessories & Bags",
-  cat_baby: "Baby & Kids",
+  cat_baby: "Baby",
+  cat_kids: " Kids",
   cat_pets: "Pet Shop",
   cat_tools: "Tools & Hardware",
   cat_toys: "Toys & Games",
@@ -2949,7 +2945,146 @@ standard_option: "Standard",
   mode_by_qty: "By Quantity",
   mode_by_budget: "Buy by Value",
   placeholder_budget_simple: "How much would you like to buy? (e.g. 500)",
-  quick_values: "Suggestions:"
+  quick_values: "Suggestions:",
+
+
+
+
+
+
+  search_title: "Search",
+  search_placeholder: "What are you looking for today?...",
+  clear: "Clear",
+  btn_explore: "Explore",
+
+  // Suggestions & Filters
+  search_filter_all: "All ({count})",
+  search_filter_this_store: "In this Store ({count})",
+  search_filter_network: "Partner Stores ({count})",
+
+  // Categories (Panel & Toggle)
+  search_see_local: "View Store",
+  search_empty_store_state: "This store has no products loaded yet.",
+  search_empty_store_hint: "Explore all global categories to find what you need:",
+
+  // Local Results & Semantic Suggestion
+  search_category_suggestion_prompt: "Were you looking for products in this category?",
+  search_explore_category_button: "View {category}",
+
+  // Partner Network & External API
+  badge_network: "Network",
+  badge_partner_store: "Partner",
+  search_network_title: "Search in other stores",
+  search_network_desc: 'Search for "{term}" across the platform',
+  search_network_limited_desc: "Few local options. Explore more products in the partner network?",
+  search_network_footer_hint: "Search for more options in other network stores",
+  search_network_empty_prompt: "We couldn't find this item in this store. Would you like to search in our partner network?",
+  searching_network_loading: "Searching partner stores...",
+  search_global_title: "Explore Other Stores",
+  search_no_global_results: "No external results found.",
+
+
+
+  cart_title: "Your Cart",
+  cart_tab_active: "In Cart",
+  cart_tab_sent: "Sent Orders",
+  cart_clear_all: "Clear all",
+  cart_clear_sent_history: "Clear history",
+
+  // Empty State
+  cart_empty_title: "Your cart is empty",
+  cart_empty_desc: "Explore the catalog and add products to finish via WhatsApp.",
+  cart_explore_products: "Explore Products",
+  cart_sent_orders_empty: "No sent orders yet.",
+
+  // Items, Units & Variations
+  cart_item_unit: "ea",
+  cart_item_count: "{count} {count, plural, one {item} other {items}}",
+  cart_default_variation: "Standard",
+  cart_multiple_variations_badge: "{count} variations selected",
+  cart_variations_toggle: "View variations",
+  cart_variations_hide: "Hide variations",
+  cart_check_variation_notice: "Confirm variations before checkout:",
+  cart_decrease_qty: "Decrease quantity",
+  cart_increase_qty: "Increase quantity",
+  cart_remove_item: "Remove product",
+
+  // Order Actions & Footer
+  cart_order_single_product: "Order this",
+  cart_order_all_products: "Checkout All ({count})",
+  cart_estimated_total: "Estimated Total",
+
+  // Sent Orders
+  cart_sent_at: "Sent at",
+  cart_move_back_to_cart: "Move back to cart",
+  cart_resend_whatsapp: "Resend on WhatsApp",
+
+  // WhatsApp Formatted Message
+  cart_order_header: "🛍️ *New Order*",
+  cart_order_qty: "Qty",
+  cart_order_variation: "Option",
+  cart_order_observation: "Note",
+  cart_order_image: "Photo",
+  cart_order_total_items: "Total Items",
+  cart_order_total_price: "TOTAL ORDER",
+  cart_order_greeting: "Hello! I would like to confirm availability and payment/delivery details for this order.",
+
+  // Confirmation Modal
+  confirm_action_title: "Are you sure?",
+  confirm_delete_item_desc: "Do you want to remove this product from your cart?",
+  confirm_delete_variation_desc: "Do you want to remove this variation from your cart?",
+  confirm_delete_group_desc: "Do you want to remove this product and all its variations?",
+  confirm_clear_cart_desc: "This will remove all items from your cart. Do you want to continue?",
+  confirm_clear_history_desc: "This will clear all sent orders history. Do you want to continue?",
+  confirm_delete_button: "Remove",
+  confirm_clear_button: "Clear",
+  cancel_button: "Cancel",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  dock_cart_button: "Cart",
+  dock_search_button: "Search",
+  dock_expand_all: "Expand All",
+  dock_cart_tab: "Cart",
+  dock_search_tab: "Search",
+  dock_minimize: "Minimize",
+  dock_maximize: "Maximize",
+  dock_close: "Close",
+
+  cart_observation_prefix: "Note:",
+
+  cart_sent_history_retention_notice: "Confirmed orders are retained for 30 days.",
+
+  cart_default_store: "Store",
+  cart_whatsapp_order_header: "NEW ORDER",
+  cart_whatsapp_variation_label: "Variation",
+  cart_whatsapp_qty_label: "Qty",
+  cart_whatsapp_obs_label: "Note",
+  cart_whatsapp_photo_label: "Photo",
+  cart_whatsapp_total_items_label: "Total Items",
+  cart_whatsapp_total_payable_label: "TOTAL DUE",
+  cart_whatsapp_closing_greeting: "Hello! I would like to confirm availability and delivery for this order.",
+  cart_share_order_title: "Order - {store}",
+
+
+
+
+  common_back: "Back",
+  common_order: "Checkout",
+  checkout_bar: "Checkout bar",
+  dock_more_products: "See More",
+  
   },
 
 
@@ -3173,7 +3308,6 @@ standard_option: "Standard",
     wpp_section_desc: "Configure o número oficial para receber pedidos via WhatsApp.",
     whatsapp_placeholder: "84 000 0000",
     btn_new_product: "Novo Produto",
-    search_placeholder: "Pesquisar produtos...",
     status_active: "Ativo",
     status_paused: "Pausado",
 
@@ -4580,8 +4714,6 @@ noImage: "Sem Imagem",
 
     category: "Categoria",
     search_title: "Pesquisar",
-    search_in_store: "Nesta Loja",
-    search_global_title: "Outras Lojas",
     search_global_btn: "Procurar noutras lojas por",
     search_no_results: "Nenhum resultado encontrado.",
     search_suggestions: "Sugestões",
@@ -4591,13 +4723,11 @@ noImage: "Sem Imagem",
 
 
   search_global_categories: "Categorias Globais",
-  search_see_local: "Ver Locais",
   search_see_global: "Outras Lojas",
   search_no_categories: "Nenhuma categoria carregada localmente.",
   search_local_results: "Artigos da Loja",
   search_no_local_results: "Nenhum artigo encontrado nesta loja.",
   search_global_button: "Pesquisar fora desta loja",
-  search_no_global_results: "Nenhum resultado global encontrado.",
 
 
 
@@ -4612,7 +4742,8 @@ noImage: "Sem Imagem",
   cat_fitness: "Fitness & Outdoor",
   cat_books: "Livros & Papelaria",
   cat_accessories: "Acessórios & Jóias",
-  cat_baby: "Bebés & Crianças",
+  cat_baby: "Bebés",
+  cat_kids: " Crianças",
   cat_pets: "Produtos para Animais",
   cat_tools: "Ferramentas & Bricolage",
   cat_toys: "Brinquedos & Jogos",
@@ -5912,7 +6043,149 @@ standard_option: "Padrão",
   mode_by_qty: "Por Quantidade",
   mode_by_budget: "Comprar por Valor",
   placeholder_budget_simple: "Quer comprar de quanto? (ex: 500)",
-  quick_values: "Sugestões:"
+  quick_values: "Sugestões:",
+
+
+
+  search_placeholder: "O que procuras hoje?...",
+  clear: "Limpar",
+  btn_explore: "Explorar",
+
+  search_filter_all: "Todos ({count})",
+  search_filter_this_store: "Nesta Loja ({count})",
+  search_filter_network: "Lojas Parceiras ({count})",
+
+  // Categorias (Painel e Alternador)
+  search_in_store: "Categorias da Loja",
+  search_see_local: "Ver da Loja",
+  search_empty_store_state: "Esta loja ainda não possui artigos carregados.",
+  search_empty_store_hint: "Explore todas as categorias globais para encontrar o que procura:",
+
+  // Resultados Locais e Sugestão Semântica
+  search_category_suggestion_prompt: "Procurava por artigos desta categoria?",
+  search_explore_category_button: "Ver {category}",
+
+  // Rede de Lojas Parceiras e API Externa
+  badge_network: "Rede",
+  badge_partner_store: "Parceiro",
+  search_network_title: "Buscar em outras lojas",
+  search_network_desc: 'Pesquisar por "{term}" em toda a plataforma',
+  search_network_limited_desc: "Poucas opções locais. Explorar mais artigos na rede parceira?",
+  search_network_footer_hint: "Procurar mais opções em outras lojas da rede",
+  search_network_empty_prompt: "Não encontramos este artigo nesta loja. Gostaria de procurar na nossa rede parceira?",
+  searching_network_loading: "Buscando em lojas parceiras...",
+  search_global_title: "Explorar em Outras Lojas",
+  search_no_global_results: "Nenhum resultado externo encontrado.",
+
+
+
+
+
+
+
+
+
+  cart_title: "Seu Carrinho",
+  cart_tab_active: "No Carrinho",
+  cart_tab_sent: "Enviados",
+  cart_clear_all: "Limpar tudo",
+  cart_clear_sent_history: "Limpar histórico",
+
+  // Estado Vazio
+  cart_empty_title: "O seu carrinho está vazio",
+  cart_empty_desc: "Explore o catálogo e adicione produtos para finalizar pelo WhatsApp.",
+  cart_explore_products: "Explorar Produtos",
+  cart_sent_orders_empty: "Nenhum pedido enviado ainda.",
+
+  // Itens, Unidades e Variações
+  cart_item_unit: "un",
+  cart_item_count: "{count} {count, plural, one {item} other {itens}}",
+  cart_default_variation: "Padrão",
+  cart_multiple_variations_badge: "{count} variações selecionadas",
+  cart_variations_toggle: "Ver variações",
+  cart_variations_hide: "Ocultar variações",
+  cart_check_variation_notice: "Confirme as variações antes de enviar:",
+  cart_decrease_qty: "Diminuir quantidade",
+  cart_increase_qty: "Aumentar quantidade",
+  cart_remove_item: "Remover produto",
+
+  // Ações de Compra e Rodapé
+  cart_order_single_product: "Comprar este",
+  cart_order_all_products: "Finalizar Tudo ({count})",
+  cart_estimated_total: "Total Estimado",
+
+  // Pedidos Enviados
+  cart_sent_at: "Enviado em",
+  cart_move_back_to_cart: "Mover de volta ao carrinho",
+  cart_resend_whatsapp: "Reenviar no WhatsApp",
+
+  // Mensagem Formatada do WhatsApp
+  cart_order_header: "🛍️ *Novo Pedido*",
+  cart_order_qty: "Qtd",
+  cart_order_variation: "Variação",
+  cart_order_observation: "Obs",
+  cart_order_image: "Foto",
+  cart_order_total_items: "Itens Totais",
+  cart_order_total_price: "TOTAL DO PEDIDO",
+  cart_order_greeting: "Olá! Gostaria de confirmar a disponibilidade e os detalhes de pagamento/entrega deste pedido.",
+
+  // Modal de Confirmação
+  confirm_action_title: "Tens a certeza?",
+  confirm_delete_item_desc: "Desejas remover este produto do teu carrinho?",
+  confirm_delete_variation_desc: "Desejas remover esta variação do teu carrinho?",
+  confirm_delete_group_desc: "Desejas remover este produto e todas as suas variações?",
+  confirm_clear_cart_desc: "Isto irá remover todos os artigos do teu carrinho. Desejas continuar?",
+  confirm_clear_history_desc: "Isto irá apagar todo o histórico de pedidos enviados. Desejas continuar?",
+  confirm_delete_button: "Remover",
+  confirm_clear_button: "Limpar",
+  cancel_button: "Cancelar",
+
+
+
+
+
+
+
+
+
+
+  dock_cart_button: "Carrinho",
+  dock_search_button: "Pesquisar",
+  dock_expand_all: "Expandir Tudo",
+  dock_cart_tab: "Carrinho",
+  dock_search_tab: "Buscar",
+  dock_minimize: "Minimizar",
+  dock_maximize: "Maximizar",
+  dock_close: "Fechar",
+
+  cart_observation_prefix: "Obs:",
+  cart_sent_history_retention_notice: "Os pedidos confirmados são guardados durante 30 dias.",
+  
+  cart_default_store: "Loja",
+  cart_whatsapp_order_header: "NOVO PEDIDO",
+  cart_whatsapp_variation_label: "Variação",
+  cart_whatsapp_qty_label: "Qtd",
+  cart_whatsapp_obs_label: "Obs",
+  cart_whatsapp_photo_label: "Foto",
+  cart_whatsapp_total_items_label: "Total de Itens",
+  cart_whatsapp_total_payable_label: "TOTAL A PAGAR",
+  cart_whatsapp_closing_greeting: "Olá! Gostaria de confirmar a disponibilidade e o envio deste pedido.",
+  cart_share_order_title: "Pedido - {store}",
+
+
+
+
+
+
+
+
+  common_back: "Voltar",
+  common_order: "Finalizar",
+  checkout_bar: "Barra de finalização",
+
+  dock_more_products: "Ver Mais", 
+  
+  
 }
 
 

@@ -19,6 +19,9 @@ import {
   getSmartTagEmoji 
 } from "./productSpecUtils";
 
+const STORAGE_CART_KEY = "storely_cart_items";
+const STORAGE_SENT_KEY = "storely_sent_orders";
+
 interface ProductCheckoutProps {
   quantity: number;
   setQuantity: (q: number | ((prev: number) => number)) => void;
@@ -91,7 +94,6 @@ export const ProductCheckout = memo(function ProductCheckout({
   const safeLimit = Math.max(1, maxQuantity);
   const currentQuantity = Math.min(Math.max(1, Number(quantity) || 1), safeLimit);
 
-  // Modo de Compra: "qty" (Quantidade) ou "budget" (Pelo valor que tenho)
   const [purchaseMode, setPurchaseMode] = useState<"qty" | "budget">("qty");
   const [rawBudgetValue, setRawBudgetValue] = useState<string>("");
 
@@ -156,7 +158,6 @@ export const ProductCheckout = memo(function ProductCheckout({
     setQuantity(1);
   }, [setQuantity]);
 
-  // Atalhos de orçamento proporcionais ao produto
   const quickChips = useMemo(() => {
     if (unitPriceFinal > 0) {
       const base = Math.ceil(unitPriceFinal);
@@ -255,18 +256,70 @@ export const ProductCheckout = memo(function ProductCheckout({
     });
   }, [selectedOptions, t]);
 
+  // Ação de Confirmação: executa a função pai que grava no localStorage
   const onWhatsAppCheckoutClick = useCallback(() => {
     if (isEditorRoute) return;
 
-    if (!activeWhatsApp && handleWhatsAppOrder) {
+    if (handleWhatsAppOrder) {
       handleWhatsAppOrder();
       return;
     }
 
-    if (!activeWhatsApp) {
-      if (handleWhatsAppOrder) handleWhatsAppOrder();
-      return;
+    // Fallback de segurança se handleWhatsAppOrder não for provido
+    const pid = productId || productName || "item";
+    const optsStr = Object.keys(selectedOptions || {}).length > 0 ? JSON.stringify(selectedOptions) : "";
+    const currentLineItemId = `${pid}_${optsStr}_${customNote.trim()}`;
+
+    const currentItemPayload = {
+      lineItemId: currentLineItemId,
+      productId: productId || undefined,
+      name: productName,
+      price: unitPriceFinal,
+      unitPriceFinal,
+      quantity: currentQuantity,
+      unit: translatedUnit || "un",
+      mainImage: productImage,
+      storeSlug,
+      storeWhatsApp: activeWhatsApp,
+      selectedOptions: Object.keys(selectedOptions || {}).length > 0 ? selectedOptions : undefined,
+      customNote: customNote.trim() || undefined,
+    };
+
+    try {
+      const calculatedTotalPrice = unitPriceFinal * currentQuantity;
+      const newSentOrder = {
+        id: `order_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        sentAt: new Date().toLocaleDateString(undefined, { hour: "2-digit", minute: "2-digit" }),
+        sentTimestamp: Date.now(),
+        storeSlug,
+        storeWhatsApp: activeWhatsApp,
+        totalPrice: calculatedTotalPrice,
+        totalQty: currentQuantity,
+        items: [currentItemPayload],
+      };
+
+      const rawSent = localStorage.getItem(STORAGE_SENT_KEY);
+      const currentSent = rawSent ? JSON.parse(rawSent) : [];
+      localStorage.setItem(STORAGE_SENT_KEY, JSON.stringify([newSentOrder, ...currentSent]));
+
+      const rawCart = localStorage.getItem(STORAGE_CART_KEY);
+      if (rawCart) {
+        const currentCart = JSON.parse(rawCart);
+        const updatedCart = currentCart.filter((it: any) => {
+          const itPid = it.productId || it.name || "item";
+          const itOpts = it.selectedOptions ? JSON.stringify(it.selectedOptions) : "";
+          const itKey = it.lineItemId || `${itPid}_${itOpts}_${it.customNote || ""}`;
+          return itKey !== currentLineItemId;
+        });
+        localStorage.setItem(STORAGE_CART_KEY, JSON.stringify(updatedCart));
+      }
+
+      window.dispatchEvent(new Event("storely:cart:sync"));
+    } catch (err) {
+      console.error("Falha ao salvar no storage de enviados:", err);
     }
+
+    if (!activeWhatsApp) return;
 
     const unitLabel = translatedUnit || "un";
     const shopDisplayName = activeStoreName;
@@ -298,14 +351,19 @@ export const ProductCheckout = memo(function ProductCheckout({
     }
   }, [
     isEditorRoute,
-    activeWhatsApp,
     handleWhatsAppOrder,
-    translatedUnit,
-    activeStoreName,
+    productId,
     productName,
+    unitPriceFinal,
     currentQuantity,
-    activeOptionEntries,
+    translatedUnit,
+    productImage,
+    storeSlug,
+    activeWhatsApp,
+    selectedOptions,
     customNote,
+    activeStoreName,
+    activeOptionEntries,
     localizedTotalPrice,
     t
   ]);
@@ -444,61 +502,59 @@ export const ProductCheckout = memo(function ProductCheckout({
           </div>
         )}
 
-      {/* Visão 2: Pelo Orçamento (Sem símbolo rígido de moeda) */}
-{purchaseMode === "budget" && (
-  <div className="flex flex-col gap-1.5 w-full min-w-0">
-    <div className={`flex h-11 w-full min-w-0 items-center rounded-xl border px-3 relative ${styles.surface}`}>
-      <input
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        value={rawBudgetValue}
-        onChange={handleBudgetInputChange}
-        placeholder={t("placeholder_budget_simple", { defaultValue: "Quer comprar de quanto? (ex: 500)" })}
-        className="w-full min-w-0 bg-transparent text-base sm:text-sm font-bold text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none tabular-nums"
-      />
-      {rawBudgetValue && (
-        <button
-          type="button"
-          onClick={handleClearBudget}
-          className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
-          aria-label={t("clear", { defaultValue: "Limpar" })}
-        >
-          <X size={14} />
-        </button>
-      )}
-    </div>
+        {/* Visão 2: Pelo Orçamento */}
+        {purchaseMode === "budget" && (
+          <div className="flex flex-col gap-1.5 w-full min-w-0">
+            <div className={`flex h-11 w-full min-w-0 items-center rounded-xl border px-3 relative ${styles.surface}`}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={rawBudgetValue}
+                onChange={handleBudgetInputChange}
+                placeholder={t("placeholder_budget_simple", { defaultValue: "Quer comprar de quanto? (ex: 500)" })}
+                className="w-full min-w-0 bg-transparent text-base sm:text-sm font-bold text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none tabular-nums"
+              />
+              {rawBudgetValue && (
+                <button
+                  type="button"
+                  onClick={handleClearBudget}
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
+                  aria-label={t("clear", { defaultValue: "Limpar" })}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
-    {/* Chips de Valores Sugeridos */}
-    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
-      <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 shrink-0">
-        {t("quick_values", { defaultValue: "Sugestões:" })}
-      </span>
-      {quickChips.map((chipVal) => (
-        <button
-          key={chipVal}
-          type="button"
-          onClick={() => applyBudget(String(chipVal))}
-          className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-colors shrink-0 ${
-            rawBudgetValue === String(chipVal)
-              ? "bg-emerald-600 text-white shadow-2xs"
-              : "bg-slate-200/80 hover:bg-slate-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300"
-          }`}
-        >
-          {chipVal}
-        </button>
-      ))}
-    </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+              <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 shrink-0">
+                {t("quick_values", { defaultValue: "Sugestões:" })}
+              </span>
+              {quickChips.map((chipVal) => (
+                <button
+                  key={chipVal}
+                  type="button"
+                  onClick={() => applyBudget(String(chipVal))}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-colors shrink-0 ${
+                    rawBudgetValue === String(chipVal)
+                      ? "bg-emerald-600 text-white shadow-2xs"
+                      : "bg-slate-200/80 hover:bg-slate-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300"
+                  }`}
+                >
+                  {chipVal}
+                </button>
+              ))}
+            </div>
 
-    {/* Resposta do Cálculo (Leva X, Sobra Y) */}
-    {budgetFeedback && (
-      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200/70 dark:border-emerald-800/40 mt-1">
-        <Sparkles size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-        <span className="truncate">{budgetFeedback}</span>
-      </div>
-    )}
-  </div>
-)}
+            {budgetFeedback && (
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200/70 dark:border-emerald-800/40 mt-1">
+                <Sparkles size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span className="truncate">{budgetFeedback}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 3. Totalizador do Pedido */}
